@@ -1,16 +1,16 @@
 import pandas as pd
 import numpy as np
 
-def accuracy_assesment(imputed_df_s: list, original_df, numeric_columns=[]) -> list:
+def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns=[], vector_columns=[]) -> list:
     """
     This method compute the accuracy of the imputed dataframes with respect to the original dataframe.
     :param imputed_df_s: list of imputed pandas dataframes.
     :param original_df: pandas dataframe taken as reference when computing the accuracy.
+    :param columns: columns to check.
     :param numeric_columns: list of column names that have a numeric value.
+    :param vector_columns: list of vector variables.
     :return: list of accuracies.
     """
-
-    columns = original_df.columns
     
     accuracies = []
     
@@ -23,7 +23,10 @@ def accuracy_assesment(imputed_df_s: list, original_df, numeric_columns=[]) -> l
             # defining distance function based on the type of variable.
             if c in numeric_columns:
                 maximum_distance = original_df[c].max() - original_df[c].min()
-                distance_function = lambda x, y: (np.abs(x - y) / maximum_distance) 
+                distance_function = lambda x, y: (np.abs(x - y) / maximum_distance)
+            elif c in vector_columns:
+                # here we assume vectors are normalized.
+                distance_function = lambda x, y: np.abs(1 - (np.dot(np.array(x), np.array(y))))
             else:
                 distance_function = lambda x, y: 1 if x != y else 0
             
