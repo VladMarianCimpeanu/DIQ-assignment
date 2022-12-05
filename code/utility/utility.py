@@ -7,6 +7,8 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.neighbors import KNeighborsClassifier
 
+from sklearn.neighbors import KNeighborsRegressor
+
 
 def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns=[], vector_columns=[]) -> list:
     """
@@ -54,7 +56,7 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
     return accuracies
 
 
-def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
+def iterative_imputation_KNN(df_in, target, numerical_columns: list, neighbours=3, n_iter=10):
     """
     This method uses KNN to iteratively impute NaN values.
     :param df_in: pandas dataframe to impute.
@@ -100,10 +102,15 @@ def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
             train_X = X.iloc[f]
             imputed_X = X.iloc[m]
 
-            knn = KNeighborsClassifier(n_neighbors=neighbours)
-            knn.fit(train_X, train_y)
+            if (c not in numerical_columns):
+                knn = KNeighborsClassifier(n_neighbors=neighbours)
+                knn.fit(train_X, train_y)
+                imputed_y = knn.predict(imputed_X)
+            else:
+                regr = KNeighborsRegressor(n_neighbors=neighbours)
+                regr.fit(train_X, train_y)
+                imputed_y = regr.predict(imputed_X)
 
-            imputed_y = knn.predict(imputed_X)
             df[c].iloc[m] = imputed_y
     progressbar.reset()
     return df
@@ -122,7 +129,7 @@ class ProgressBar:
         reset the learner to the initial state.
         :return: None
         """
-        self.__init__(self.end, self.width, self.step_size) 
+        self.__init__(self.end, self.width, self.step_size)
 
     def next(self):
         """
@@ -134,6 +141,7 @@ class ProgressBar:
         n_completed = ceil(percentage / 100 * self.width)
         completed = "=" * n_completed
         to_complete = " " * (self.width - n_completed)
-        sys.stdout.write("\rloading: [{}{}] {:0.1f}%".format(completed, to_complete, percentage))
+        sys.stdout.write("\rloading: [{}{}] {:0.1f}%".format(
+            completed, to_complete, percentage))
         if self.step == self.end:
             print()
