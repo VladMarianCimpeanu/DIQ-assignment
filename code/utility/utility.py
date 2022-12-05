@@ -9,7 +9,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import cross_val_score, train_test_split, KFold
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, confusion_matrix
-
+from sklearn import svm
 
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -60,11 +60,12 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
     return dict(zip(percentages, accuracies))
 
 
-def iterative_imputation_KNN(df_in, target, numerical_columns: list, neighbours=3, n_iter=10):
+def iterative_imputation_KNN(df_in, target, numerical_columns=[], neighbours=3, n_iter=10):
     """
     This method uses KNN to iteratively impute NaN values.
     :param df_in: pandas dataframe to impute.
     :param target: target column. This column should not be considered during imputation.
+    :param numerical_columns: columns that must be imputed with regression algorithms. Default empty list.
     :param neighbours: number of neighbours for KNN.
     :param n_iter: number of times the dataset must be scanned.
     :return: a new pandas dataframe imputed.
@@ -195,6 +196,7 @@ def model_selection_decision_tree(n_splits, X_train, y_train, seed):
     # hyperparameters to validate
     grid_values = range(2, 20)
     accuracies = []
+    std_accuracies = []
 
     # model validation
     for v in grid_values:
@@ -203,14 +205,60 @@ def model_selection_decision_tree(n_splits, X_train, y_train, seed):
         scores = cross_val_score(
             decision_tree, X_train, y_train, cv=KFold(n_splits=n_splits, shuffle=True, random_state=seed))
         accuracies.append(np.mean(scores))
+        std_accuracies.append(np.std(scores))
 
+    # since the results present noise, we select the model with the highest pessimist validation accuracy.
+    lower_bounds = np.array(accuracies) - np.array(std_accuracies)
     # model selection
-    # hyperparameter with value x corresponds to model at index x - 2
-    best_model = np.argmax(accuracies) + 2
+    # hyperparameter with value x corresponds to model at index x + 2
+    best_model = np.argmax(lower_bounds) + 2
     best_decision_tree = DecisionTreeClassifier(
         criterion='gini', min_samples_split=best_model)
     best_decision_tree = best_decision_tree.fit(X_train, y_train)
     return best_decision_tree
+
+
+def model_selection_SVM(n_splits, X_train, y_train, seed):
+    """
+    Model selection function for a SVM with round basis function kernel.
+    :param n_splits: number of splits in the k-fold procedure.
+    :param X_train: covariates used for training.
+    :param y_train: target variables for training.
+    :param seed: for reproducibility.
+    :return : best decision tree found.
+    """
+    # hyperparameters to validate
+    C_values = [1e-2, .1, .2, .5, .8, 1, 2, 3, 5, 10]
+    accuracies = []
+    std_accuracies = []
+
+    # model validation
+    for c in C_values:
+        svm_mc = svm.SVC(
+            kernel='rbf',
+            max_iter=1000,
+            random_state=seed,
+            C=c
+        )
+        scores = cross_val_score(
+            svm_mc, X_train, y_train, cv=KFold(n_splits=n_splits, shuffle=True, random_state=seed))
+        accuracies.append(np.mean(scores))
+        std_accuracies.append(np.std(scores))
+
+    # since the results present noise, we select the model with the highest pessimist validation accuracy.
+    lower_bounds = np.array(accuracies) - np.array(std_accuracies)
+
+    # model selection
+    best_model_index = np.argmax(lower_bounds)
+    best_c = C_values[best_model_index]
+    best_svm = svm.SVC(
+        kernel='rbf',
+        max_iter=1000,
+        random_state=seed,
+        C=best_c
+    )
+    best_svm = best_svm.fit(X_train, y_train)
+    return best_svm
 
 
 def evaluate_model(model, X_test, y_test):
@@ -226,7 +274,8 @@ def evaluate_model(model, X_test, y_test):
     y_pred = model.predict(X_test)
 
     # compute f1-score, precision and recall for each target category
-    report = classification_report(y_test, y_pred, output_dict=True)
+    report = classification_report(
+        y_test, y_pred, output_dict=True, zero_division=0)
     report = pd.DataFrame(report)
     report = report.drop(
         labels=['accuracy', 'macro avg', 'weighted avg'], axis=1)
