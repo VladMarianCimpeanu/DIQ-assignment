@@ -24,7 +24,7 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
     :param vector_columns: list of vector variables.
     :return: list of accuracies.
     """
-
+    percentages = ['50%', '60%', '70%', '80%', '90%', ]
     accuracies = []
 
     tot_size = original_df.shape[0] * original_df.shape[1]
@@ -57,7 +57,7 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
         accuracy = (tot_size - distance_error) / tot_size
         accuracies.append(accuracy)
 
-    return accuracies
+    return dict(zip(percentages, accuracies))
 
 
 def iterative_imputation_KNN(df_in, target, numerical_columns: list, neighbours=3, n_iter=10):
@@ -174,14 +174,15 @@ def pipeline_ML(df, target_name, seed, validation_function):
     # splitting the dataset.
     X_train, X_test, y_train, y_test = train_test_split(
         df[covariates_columns], df[target_name], test_size=0.3, random_state=seed, stratify=df[target_name])
-    
+
     # model_selection
     best_model = validation_function(10, X_train, y_train, seed)
-    test_accuracy, report, confusion_matrix_df = evaluate_model(best_model, X_test, y_test)
+    test_accuracy, report, confusion_matrix_df = evaluate_model(
+        best_model, X_test, y_test)
     # evaluate best model on test data.
     return best_model, test_accuracy, report, confusion_matrix_df
-    
-    
+
+
 def model_selection_decision_tree(n_splits, X_train, y_train, seed):
     """
     Model selection function for a decision tree.
@@ -197,18 +198,21 @@ def model_selection_decision_tree(n_splits, X_train, y_train, seed):
 
     # model validation
     for v in grid_values:
-        decision_tree = DecisionTreeClassifier(criterion='gini', min_samples_split=v)
+        decision_tree = DecisionTreeClassifier(
+            criterion='gini', min_samples_split=v)
         scores = cross_val_score(
             decision_tree, X_train, y_train, cv=KFold(n_splits=n_splits, shuffle=True, random_state=seed))
         accuracies.append(np.mean(scores))
-    
+
     # model selection
-    best_model = np.argmax(accuracies) + 2 # hyperparameter with value x corresponds to model at index x - 2 
-    best_decision_tree = DecisionTreeClassifier(criterion='gini', min_samples_split= best_model)
+    # hyperparameter with value x corresponds to model at index x - 2
+    best_model = np.argmax(accuracies) + 2
+    best_decision_tree = DecisionTreeClassifier(
+        criterion='gini', min_samples_split=best_model)
     best_decision_tree = best_decision_tree.fit(X_train, y_train)
     return best_decision_tree
-    
-    
+
+
 def evaluate_model(model, X_test, y_test):
     """
     This function takes a model in input and evaluate it with overall accuracy, and for each class F1-score, recall and precision.
@@ -220,12 +224,14 @@ def evaluate_model(model, X_test, y_test):
     # compute accuracy
     test_accuracy = model.score(X_test, y_test)
     y_pred = model.predict(X_test)
-    
+
     # compute f1-score, precision and recall for each target category
     report = classification_report(y_test, y_pred, output_dict=True)
     report = pd.DataFrame(report)
-    report = report.drop(labels=['accuracy', 'macro avg', 'weighted avg'], axis=1)
-    
+    report = report.drop(
+        labels=['accuracy', 'macro avg', 'weighted avg'], axis=1)
+
     # compute heatmap for confusion matrix.
-    confusion_matrix_df = pd.DataFrame(confusion_matrix(y_test, y_pred, normalize="true"))
+    confusion_matrix_df = pd.DataFrame(
+        confusion_matrix(y_test, y_pred, normalize="true"))
     return test_accuracy, report, confusion_matrix_df
