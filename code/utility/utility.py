@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+import sys
+
+from math import ceil
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.neighbors import KNeighborsClassifier
@@ -80,9 +83,9 @@ def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
     simple_imputer = SimpleImputer(missing_values=np.NaN, strategy='most_frequent')
     df = simple_imputer.fit_transform(df)
     df = pd.DataFrame(df, columns=df_in.columns)
-
-    for i in range(n_iter):
-        # print(f'iteration: {i}')
+    progressbar = ProgressBar(n_iter)
+    for _ in range(n_iter):
+        progressbar.next()
         for c, l, f, m in zip(missing_columns, train_columns, full_indexes, missing_indexes):
             # Prepare data for the imputatoin: fit the model with features belonging to 
             # l, which are all the labels but the one that must be imputed.
@@ -99,5 +102,35 @@ def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
             
             imputed_y = knn.predict(imputed_X)
             df[c].iloc[m] = imputed_y
-
+    progressbar.reset()
     return df
+
+
+class ProgressBar:
+
+    def __init__(self, end, width=15, step_size=1) -> None:
+        self.step = 0
+        self.end = end
+        self.width = width
+        self.step_size = step_size
+
+    def reset(self):
+        """
+        reset the learner to the initial state.
+        :return: None
+        """
+        self.__init__(self.end, self.width, self.step_size) 
+
+    def next(self):
+        """
+        print updated progress bar.
+        :return: None
+        """
+        self.step += self.step_size
+        percentage = self.step / self.end * 100
+        n_completed = ceil(percentage / 100 * self.width)
+        completed = "=" * n_completed
+        to_complete = " " * (self.width - n_completed)
+        sys.stdout.write("\rloading: [{}{}] {:0.1f}%".format(completed, to_complete, percentage))
+        if self.step == self.end:
+            print()
