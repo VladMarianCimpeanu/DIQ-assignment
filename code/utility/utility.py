@@ -6,6 +6,10 @@ from math import ceil
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import cross_val_score, train_test_split, KFold
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+
 
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -119,6 +123,12 @@ def iterative_imputation_KNN(df_in, target, numerical_columns: list, neighbours=
 class ProgressBar:
 
     def __init__(self, end, width=15, step_size=1) -> None:
+        """
+        This class implements a dynamic progress bar.
+        :param end: number of iteration of the process to represent.
+        :param width: width of the diplayed progress bar. Default is 15.
+        :param step_size: size of the steps at each iteration. By default it is set to 1.
+        """
         self.step = 0
         self.end = end
         self.width = width
@@ -145,3 +155,77 @@ class ProgressBar:
             completed, to_complete, percentage))
         if self.step == self.end:
             print()
+
+
+def pipeline_ML(df, target_name, seed, validation_function):
+    """
+    This function implements a full machine learning pipeline. It implements training, validation and evaluation of the model.
+    :param df: pandas dataframe object containing all the necessary data for the pipeline. 
+    :param target_name: name of the column related to the target of the classification ML task.
+    :param seed: random seed for reproducibility.
+    :param validation_function: function used to make model selection. The validation function signature should be: n_splits, X_train, y_train, seed.
+    The validation function should perform a k-fold validation with n_splits for a learning algorithm defined in that function.
+    :return: the best model, test accuracy, report containing f1-score, precision, recall for each target class and a pandas dataframe containing the confusion matrix.
+    """
+    # distinguish columns related to covariates and for targets.
+    covariates_columns = list(df.columns.values)
+    covariates_columns.remove(target_name)
+
+    # splitting the dataset.
+    X_train, X_test, y_train, y_test = train_test_split(
+        df[covariates_columns], df[target_name], test_size=0.3, random_state=seed, stratify=df[target_name])
+    
+    # model_selection
+    best_model = validation_function(10, X_train, y_train, seed)
+    test_accuracy, report, confusion_matrix_df = evaluate_model(best_model, X_test, y_test)
+    # evaluate best model on test data.
+    return best_model, test_accuracy, report, confusion_matrix_df
+    
+    
+def model_selection_decision_tree(n_splits, X_train, y_train, seed):
+    """
+    Model selection function for a decision tree.
+    :param n_splits: number of splits in the k-fold procedure.
+    :param X_train: covariates used for training.
+    :param y_train: target variables for training.
+    :param seed: for reproducibility.
+    :return : best decision tree found.
+    """
+    # hyperparameters to validate
+    grid_values = range(2, 20)
+    accuracies = []
+
+    # model validation
+    for v in grid_values:
+        decision_tree = DecisionTreeClassifier(criterion='gini', min_samples_split=v)
+        scores = cross_val_score(
+            decision_tree, X_train, y_train, cv=KFold(n_splits=n_splits, shuffle=True, random_state=seed))
+        accuracies.append(np.mean(scores))
+    
+    # model selection
+    best_model = np.argmax(accuracies) + 2 # hyperparameter with value x corresponds to model at index x - 2 
+    best_decision_tree = DecisionTreeClassifier(criterion='gini', min_samples_split= best_model)
+    best_decision_tree = best_decision_tree.fit(X_train, y_train)
+    return best_decision_tree
+    
+    
+def evaluate_model(model, X_test, y_test):
+    """
+    This function takes a model in input and evaluate it with overall accuracy, and for each class F1-score, recall and precision.
+    :param model: trained model to evaluate.
+    :param X_test: covariates for testing.
+    :param y_test: labels for testing.
+    :return : test accuracy, pandas dataframe containing f1-score, precision and recall metrics, pandas dataframe containing confusion matrix.
+    """
+    # compute accuracy
+    test_accuracy = model.score(X_test, y_test)
+    y_pred = model.predict(X_test)
+    
+    # compute f1-score, precision and recall for each target category
+    report = classification_report(y_test, y_pred, output_dict=True)
+    report = pd.DataFrame(report)
+    report = report.drop(labels=['accuracy', 'macro avg', 'weighted avg'], axis=1)
+    
+    # compute heatmap for confusion matrix.
+    confusion_matrix_df = pd.DataFrame(confusion_matrix(y_test, y_pred, normalize="true"))
+    return test_accuracy, report, confusion_matrix_df
