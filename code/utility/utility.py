@@ -183,6 +183,7 @@ def model_selection_decision_tree(n_splits, X_train, y_train, seed):
     # hyperparameters to validate
     grid_values = range(2, 20)
     accuracies = []
+    std_accuracies = []
 
     # model validation
     for v in grid_values:
@@ -190,9 +191,11 @@ def model_selection_decision_tree(n_splits, X_train, y_train, seed):
         scores = cross_val_score(
             decision_tree, X_train, y_train, cv=KFold(n_splits=n_splits, shuffle=True, random_state=seed))
         accuracies.append(np.mean(scores))
+        std_accuracies.append(np.std(scores))
     
+    lower_bounds = np.array(accuracies) - np.array(std_accuracies) # since the results presents noise, we select the model with the highest pessimist validation accuracy.
     # model selection
-    best_model = np.argmax(accuracies) + 2 # hyperparameter with value x corresponds to model at index x - 2 
+    best_model = np.argmax(lower_bounds) + 2 # hyperparameter with value x corresponds to model at index x - 2 
     best_decision_tree = DecisionTreeClassifier(criterion='gini', min_samples_split= best_model)
     best_decision_tree = best_decision_tree.fit(X_train, y_train)
     return best_decision_tree
@@ -211,7 +214,7 @@ def evaluate_model(model, X_test, y_test):
     y_pred = model.predict(X_test)
     
     # compute f1-score, precision and recall for each target category
-    report = classification_report(y_test, y_pred, output_dict=True)
+    report = classification_report(y_test, y_pred, output_dict=True, zero_division=0)
     report = pd.DataFrame(report)
     report = report.drop(labels=['accuracy', 'macro avg', 'weighted avg'], axis=1)
     
