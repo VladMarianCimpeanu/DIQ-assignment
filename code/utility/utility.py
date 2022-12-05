@@ -109,6 +109,12 @@ def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
 class ProgressBar:
 
     def __init__(self, end, width=15, step_size=1) -> None:
+        """
+        This class implements a dynamic progress bar.
+        :param end: number of iteration of the process to represent.
+        :param width: width of the diplayed progress bar. Default is 15.
+        :param step_size: size of the steps at each iteration. By default it is set to 1.
+        """
         self.step = 0
         self.end = end
         self.width = width
