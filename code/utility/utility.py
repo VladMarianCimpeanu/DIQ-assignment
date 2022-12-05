@@ -15,34 +15,36 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
     :param vector_columns: list of vector variables.
     :return: list of accuracies.
     """
-    
+
     accuracies = []
-    
-    tot_size = original_df.shape[0] * original_df.shape[1] 
-    
+
+    tot_size = original_df.shape[0] * original_df.shape[1]
+
     for i_df in imputed_df_s:
         distance_error = 0
         for c in columns:
-            
+
             # defining distance function based on the type of variable.
             if c in numeric_columns:
                 maximum_distance = original_df[c].max() - original_df[c].min()
-                distance_function = lambda x, y: (np.abs(x - y) / maximum_distance)
+
+                def distance_function(x, y): return (
+                    np.abs(x - y) / maximum_distance)
             elif c in vector_columns:
                 # here we assume vectors are normalized.
-                distance_function = lambda x, y: np.abs(1 - (np.dot(np.array(x), np.array(y))))
+                def distance_function(x, y): return np.abs(
+                    1 - (np.dot(np.array(x), np.array(y))))
             else:
-                distance_function = lambda x, y: 1 if x != y else 0
-            
+                def distance_function(x, y): return 1 if x != y else 0
+
             # retriving values for a specific column
             imputed_column = pd.Series(i_df[c]).values
             original_column = pd.Series(original_df[c]).values
-            
+
             # compare columns
             for i, o in zip(imputed_column, original_column):
                 distance_error += distance_function(i, o)
-                
-       
+
         accuracy = (tot_size - distance_error) / tot_size
         accuracies.append(accuracy)
 
@@ -51,7 +53,7 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
 
 def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
     """
-    This method uses KNN to iteratively impute Nan values.
+    This method uses KNN to iteratively impute NaN values.
     :param df_in: pandas dataframe to impute.
     :param target: target column. This column should not be considered during imputation.
     :param neighbours: number of neighbours for KNN.
@@ -77,14 +79,15 @@ def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
         train_columns.append(train_column)
 
     # start with basic imputation
-    simple_imputer = SimpleImputer(missing_values=np.NaN, strategy='most_frequent')
+    simple_imputer = SimpleImputer(
+        missing_values=np.NaN, strategy='most_frequent')
     df = simple_imputer.fit_transform(df)
     df = pd.DataFrame(df, columns=df_in.columns)
 
     for i in range(n_iter):
         # print(f'iteration: {i}')
         for c, l, f, m in zip(missing_columns, train_columns, full_indexes, missing_indexes):
-            # Prepare data for the imputatoin: fit the model with features belonging to 
+            # Prepare data for the imputatoin: fit the model with features belonging to
             # l, which are all the labels but the one that must be imputed.
             # Samples selected for fitting are the ones havin index f, thus the ones
             # having a value in column c in the original dataset.
@@ -93,10 +96,10 @@ def iterative_imputation_KNN(df_in, target, neighbours=3, n_iter=10):
             X = pd.get_dummies(X)
             train_X = X.iloc[f]
             imputed_X = X.iloc[m]
-            
+
             knn = KNeighborsClassifier(n_neighbors=neighbours)
             knn.fit(train_X, train_y)
-            
+
             imputed_y = knn.predict(imputed_X)
             df[c].iloc[m] = imputed_y
 
