@@ -40,9 +40,15 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
                 def distance_function(x, y): return (
                     np.abs(x - y) / maximum_distance)
             elif c in vector_columns:
-                # here we assume vectors are normalized.
-                def distance_function(x, y): return np.abs(
-                    1 - (np.dot(np.array(x), np.array(y))))
+                
+                def distance_function(x, y):
+                    x = np.array(x) / np.linalg.norm(x)
+                    y = np.array(y) / np.linalg.norm(y)
+                    assert np.linalg.norm(x) == 1
+                    assert np.linalg.norm(y) == 1
+                    distance = (1 - np.dot(x, y)) / 2
+                    assert distance <= 1
+                    return distance
             else:
                 def distance_function(x, y): return 1 if x != y else 0
 
