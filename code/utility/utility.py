@@ -8,7 +8,7 @@ from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import cross_val_score, train_test_split, KFold
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from sklearn import svm
 
 from sklearn.neighbors import KNeighborsRegressor
@@ -172,7 +172,8 @@ def pipeline_ML(df, target_name, seed, validation_function):
     :param seed: random seed for reproducibility.
     :param validation_function: function used to make model selection. The validation function signature should be: n_splits, X_train, y_train, seed.
     The validation function should perform a k-fold validation with n_splits for a learning algorithm defined in that function.
-    :return: the best model, test accuracy, report containing f1-score, precision, recall for each target class and a pandas dataframe containing the confusion matrix.
+    :return: the best model, test accuracy, report containing f1-score, precision, recall for each target class a pandas dataframe containing the confusion matrix and
+    weighted f1-score. 
     """
     # distinguish columns related to covariates and for targets.
     covariates_columns = list(df.columns.values)
@@ -184,10 +185,10 @@ def pipeline_ML(df, target_name, seed, validation_function):
 
     # model_selection
     best_model = validation_function(10, X_train, y_train, seed)
-    test_accuracy, report, confusion_matrix_df = evaluate_model(
+    test_accuracy, report, confusion_matrix_df, weighted_f1_score= evaluate_model(
         best_model, X_test, y_test)
     # evaluate best model on test data.
-    return best_model, test_accuracy, report, confusion_matrix_df
+    return best_model, test_accuracy, report, confusion_matrix_df, weighted_f1_score
 
 
 def model_selection_decision_tree(n_splits, X_train, y_train, seed):
@@ -231,7 +232,7 @@ def model_selection_SVM(n_splits, X_train, y_train, seed):
     :param X_train: covariates used for training.
     :param y_train: target variables for training.
     :param seed: for reproducibility.
-    :return : best decision tree found.
+    :return : best SVM found.
     """
     # hyperparameters to validate
     C_values = [1e-2, .1, .2, .5, .8, 1, 2, 3, 5, 10]
@@ -269,11 +270,11 @@ def model_selection_SVM(n_splits, X_train, y_train, seed):
 
 def evaluate_model(model, X_test, y_test):
     """
-    This function takes a model in input and evaluate it with overall accuracy, and for each class F1-score, recall and precision.
+    This function takes a model in input and evaluate it with overall accuracy, and for each class F1-score, recall and precision and weighted f1 score.
     :param model: trained model to evaluate.
     :param X_test: covariates for testing.
     :param y_test: labels for testing.
-    :return : test accuracy, pandas dataframe containing f1-score, precision and recall metrics, pandas dataframe containing confusion matrix.
+    :return : test accuracy, pandas dataframe containing f1-score, precision and recall metrics, pandas dataframe containing confusion matrix and weighted f1 score.
     """
     # compute accuracy
     test_accuracy = model.score(X_test, y_test)
@@ -289,4 +290,8 @@ def evaluate_model(model, X_test, y_test):
     # compute heatmap for confusion matrix.
     confusion_matrix_df = pd.DataFrame(
         confusion_matrix(y_test, y_pred, normalize="true"))
-    return test_accuracy, report, confusion_matrix_df
+
+    # compute weighted macro f1-score
+    weighted_f1_score = f1_score(y_test, y_pred, average='weighted')
+
+    return test_accuracy, report, confusion_matrix_df, weighted_f1_score
