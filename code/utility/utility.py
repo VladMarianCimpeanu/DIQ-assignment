@@ -24,7 +24,7 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
     :param vector_columns: list of vector variables.
     :return: list of accuracies.
     """
-    percentages = ['50%', '60%', '70%', '80%', '90%', ]
+    percentages = [f'{p}%' for p in range(50, 100, 10)]
     accuracies = []
 
     tot_size = original_df.shape[0] * original_df.shape[1]
