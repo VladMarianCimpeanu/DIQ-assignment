@@ -107,6 +107,8 @@ def iterative_imputation_KNN(df_in, target, numerical_columns=[], neighbours=3, 
             # l, which are all the labels but the one that must be imputed.
             # Samples selected for fitting are the ones havin index f, thus the ones
             # having a value in column c in the original dataset.
+            if len(m) == 0:
+                continue
             train_y = df[c].iloc[f]
             X = df[l].copy()
             X = pd.get_dummies(X)
