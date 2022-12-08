@@ -7,10 +7,10 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import SimpleImputer, KNNImputer, IterativeImputer
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import cross_val_score, train_test_split, KFold
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
+from sklearn.linear_model import LogisticRegression
 from sklearn import svm
-
 from sklearn.neighbors import KNeighborsRegressor
 
 
@@ -66,9 +66,9 @@ def accuracy_assesment(imputed_df_s: list, original_df, columns, numeric_columns
     return dict(zip(percentages, accuracies))
 
 
-def iterative_imputation_KNN(df_in, target, numerical_columns=[], neighbours=3, n_iter=10):
+def iterative_imputation_DT(df_in, target, numerical_columns=[], min_split=8, n_iter=10):
     """
-    This method uses KNN to iteratively impute NaN values.
+    This method uses Decision trees to iteratively impute NaN values.
     :param df_in: pandas dataframe to impute.
     :param target: target column. This column should not be considered during imputation.
     :param numerical_columns: columns that must be imputed with regression algorithms. Default empty list.
@@ -76,23 +76,9 @@ def iterative_imputation_KNN(df_in, target, numerical_columns=[], neighbours=3, 
     :param n_iter: number of times the dataset must be scanned.
     :return: a new pandas dataframe imputed.
     """
+
     df = df_in.copy()
-    missing_columns = list(df.columns.values)
-    missing_columns.remove(target)
-
-    # for each column, get indexes related to missing values.
-    missing_indexes = []
-    full_indexes = []
-    for c in missing_columns:
-        missing_indexes.append(list(np.where(df[c].isnull())[0]))
-        full_indexes.append(list(np.where(df[c].notnull())[0]))
-
-    # create train columns
-    train_columns = []
-    for c in missing_columns:
-        train_column = missing_columns.copy()
-        train_column.remove(c)
-        train_columns.append(train_column)
+    missing_columns, missing_indexes, full_indexes, train_columns = prepare_iterative_imputation(df, target)
 
     # start with basic imputation
     simple_imputer = SimpleImputer(
@@ -107,6 +93,55 @@ def iterative_imputation_KNN(df_in, target, numerical_columns=[], neighbours=3, 
             # l, which are all the labels but the one that must be imputed.
             # Samples selected for fitting are the ones havin index f, thus the ones
             # having a value in column c in the original dataset.
+            
+            if len(m) == 0:
+                continue
+            train_y = df[c].iloc[f]
+            X = df[l].copy()
+            X = pd.get_dummies(X)
+            train_X = X.iloc[f]
+            imputed_X = X.iloc[m]
+
+            if (c not in numerical_columns):
+                knn = DecisionTreeClassifier(min_samples_split=8)
+                knn.fit(train_X, train_y)
+                imputed_y = knn.predict(imputed_X)
+            else:
+                regr = DecisionTreeRegressor(min_samples_split=8)
+                regr.fit(train_X, train_y)
+                imputed_y = regr.predict(imputed_X)
+
+            df[c].iloc[m] = imputed_y
+    progressbar.reset()
+    return df
+
+def iterative_imputation_KNN(df_in, target, numerical_columns=[], neighbours=3, n_iter=10):
+    """
+    This method uses KNN to iteratively impute NaN values.
+    :param df_in: pandas dataframe to impute.
+    :param target: target column. This column should not be considered during imputation.
+    :param numerical_columns: columns that must be imputed with regression algorithms. Default empty list.
+    :param neighbours: number of neighbours for KNN.
+    :param n_iter: number of times the dataset must be scanned.
+    :return: a new pandas dataframe imputed.
+    """
+    df = df_in.copy()
+    missing_columns, missing_indexes, full_indexes, train_columns = prepare_iterative_imputation(df, target)
+
+    # start with basic imputation
+    simple_imputer = SimpleImputer(
+        missing_values=np.NaN, strategy='most_frequent')
+    df = simple_imputer.fit_transform(df)
+    df = pd.DataFrame(df, columns=df_in.columns)
+    progressbar = ProgressBar(n_iter)
+    for _ in range(n_iter):
+        progressbar.next()
+        for c, l, f, m in zip(missing_columns, train_columns, full_indexes, missing_indexes):
+            # Prepare data for the imputatoin: fit the model with features belonging to
+            # l, which are all the labels but the one that must be imputed.
+            # Samples selected for fitting are the ones havin index f, thus the ones
+            # having a value in column c in the original dataset.
+            
             if len(m) == 0:
                 continue
             train_y = df[c].iloc[f]
@@ -127,6 +162,39 @@ def iterative_imputation_KNN(df_in, target, numerical_columns=[], neighbours=3, 
             df[c].iloc[m] = imputed_y
     progressbar.reset()
     return df
+
+
+def prepare_iterative_imputation(df_in, target):
+    """
+    Prepare data for the iterative imputation.
+    :param df_in: pandas dataframe for which data must be retrived.
+    :param target: column representing the target variable for the ML task.
+    :return: 
+        - missing_columns: list of columns that must be imputed.
+        - missing indexes: list of lists. List at index i contains the indexes for column i which there is a missing value.
+        - full indexes: list of complementaries of missing indexes.
+        - train_columns: list of lists. List at index i contains the column labels needed to impute column i.
+    """
+    df = df_in.copy()
+    missing_columns = list(df.columns.values)
+    missing_columns.remove(target)
+
+    # for each column, get indexes related to missing values.
+    missing_indexes = []
+    full_indexes = []
+    for c in missing_columns:
+        missing_indexes.append(list(np.where(df[c].isnull())[0]))
+        full_indexes.append(list(np.where(df[c].notnull())[0]))
+
+    # create train columns
+    train_columns = []
+    for c in missing_columns:
+        train_column = missing_columns.copy()
+        train_column.remove(c)
+        train_columns.append(train_column)
+    
+    return missing_columns, missing_indexes, full_indexes, train_columns
+
 
 
 class ProgressBar:
@@ -225,6 +293,32 @@ def model_selection_decision_tree(n_splits, X_train, y_train, seed):
         criterion='gini', min_samples_split=best_model)
     best_decision_tree = best_decision_tree.fit(X_train, y_train)
     return best_decision_tree
+
+
+def model_selection_logistic_regression(n_splits, X_train, y_train, seed):
+    # hyperparameters to validate
+    C_values = [1e-2, .1, .2, .5, .8, 1, 2, 3, 5, 10, 20]
+    accuracies = []
+    std_accuracies = []
+
+    # model validation
+    for c in C_values:
+        lr = LogisticRegression(random_state=seed, C=c, multi_class='multinomial', max_iter=200)
+        scores = cross_val_score(
+            lr, X_train, y_train, cv=KFold(n_splits=n_splits, shuffle=True, random_state=seed))
+        accuracies.append(np.mean(scores))
+        std_accuracies.append(np.std(scores))
+
+    # since the results present noise, we select the model with the highest pessimist validation accuracy.
+    lower_bounds = np.array(accuracies) - np.array(std_accuracies)
+
+    # model selection
+    best_model_index = np.argmax(lower_bounds)
+    best_c = C_values[best_model_index]
+    best_lr = LogisticRegression(random_state=seed, C=best_c, multi_class='multinomial')
+    best_lr = best_lr.fit(X_train, y_train)
+    return best_lr
+
 
 
 def model_selection_SVM(n_splits, X_train, y_train, seed):
