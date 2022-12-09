@@ -296,6 +296,14 @@ def model_selection_decision_tree(n_splits, X_train, y_train, seed):
 
 
 def model_selection_logistic_regression(n_splits, X_train, y_train, seed):
+    """
+    Model selection function for a logistic/softmax regression.
+    :param n_splits: number of splits in the k-fold procedure.
+    :param X_train: covariates used for training.
+    :param y_train: target variables for training.
+    :param seed: for reproducibility.
+    :return : best logistic regressor found.
+    """
     # hyperparameters to validate
     C_values = [1e-2, .1, .2, .5, .8, 1, 2, 3, 5, 10, 20]
     accuracies = []
